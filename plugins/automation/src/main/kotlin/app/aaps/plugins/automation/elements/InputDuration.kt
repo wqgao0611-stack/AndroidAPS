@@ -20,7 +20,7 @@ class InputDuration(
         when (unit) {
             TimeUnit.MINUTES -> {
                 numberPicker = MinutesNumberPicker(root.context, null)
-                numberPicker.setParams(value.toDouble(), 5.0, 24 * 60.0, 10.0, DecimalFormat("0"), false, root.findViewById(app.aaps.core.ui.R.id.ok))
+                numberPicker.setParams(value.toDouble(), 1.0, 24 * 60.0, 10.0, DecimalFormat("0"), false, root.findViewById(app.aaps.core.ui.R.id.ok))
             }
             TimeUnit.DAYS    -> {
                 numberPicker = MinutesNumberPicker(root.context, null)

@@ -96,6 +96,6 @@ class AutomationEventObject(private val injector: HasAndroidInjector) : Automati
     }
 
     fun shouldRun(): Boolean {
-        return lastRun <= dateUtil.now() - T.mins(5).msecs()
+        return lastRun <= dateUtil.now() - T.mins(3).msecs()
     }
 }

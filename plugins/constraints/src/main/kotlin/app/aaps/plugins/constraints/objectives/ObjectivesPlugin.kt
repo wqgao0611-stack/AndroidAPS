@@ -76,6 +76,7 @@ class ObjectivesPlugin @Inject constructor(
      * Constraints interface
      */
     override fun isLoopInvocationAllowed(value: Constraint<Boolean>): Constraint<Boolean> {
+        return value
         // Check if initialized
         if (objectives.isEmpty()) return value
         if (!objectives[FIRST_OBJECTIVE].isStarted)
@@ -84,6 +85,7 @@ class ObjectivesPlugin @Inject constructor(
     }
 
     override fun isLgsForced(value: Constraint<Boolean>): Constraint<Boolean> {
+        return value
         // Check if initialized
         if (objectives.isEmpty()) return value
         if (objectives[LGS_OBJECTIVE].isStarted && !objectives[LGS_OBJECTIVE].isAccomplished)
@@ -92,6 +94,7 @@ class ObjectivesPlugin @Inject constructor(
     }
 
     override suspend fun isClosedLoopAllowed(value: Constraint<Boolean>): Constraint<Boolean> {
+        return value
         // Check if initialized
         if (objectives.isEmpty()) return value
         if (!objectives[CLOSED_LOOP_OBJECTIVE].isStarted)
@@ -100,6 +103,7 @@ class ObjectivesPlugin @Inject constructor(
     }
 
     override fun isAutosensModeEnabled(value: Constraint<Boolean>): Constraint<Boolean> {
+        return value
         // Check if initialized
         if (objectives.isEmpty()) return value
         if (!objectives[AUTOSENS_OBJECTIVE].isStarted)
@@ -108,6 +112,7 @@ class ObjectivesPlugin @Inject constructor(
     }
 
     override suspend fun isSMBModeEnabled(value: Constraint<Boolean>): Constraint<Boolean> {
+        return value
         // Check if initialized
         if (objectives.isEmpty()) return value
         if (!objectives[SMB_OBJECTIVE].isStarted)
@@ -116,6 +121,7 @@ class ObjectivesPlugin @Inject constructor(
     }
 
     override fun isAutomationEnabled(value: Constraint<Boolean>): Constraint<Boolean> {
+        return value
         // Check if initialized
         if (objectives.isEmpty()) return value
         if (!objectives[AUTO_OBJECTIVE].isStarted)
@@ -124,6 +130,7 @@ class ObjectivesPlugin @Inject constructor(
     }
 
     override fun isConcentrationEnabled(value: Constraint<Boolean>): Constraint<Boolean> {
+        return value
         if (objectives.isEmpty()) return value
         if (!objectives[EXAM_OBJECTIVE].isAccomplished) {
             value.set(false, rh.gs(R.string.objectivenotfinished, EXAM_OBJECTIVE + 1), this)

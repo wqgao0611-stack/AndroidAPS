@@ -144,7 +144,7 @@ class AutomationPlugin @Inject constructor(
     init {
         refreshLoop = Runnable {
             processActions()
-            handler?.postDelayed(refreshLoop, T.secs(150).msecs())
+            handler?.postDelayed(refreshLoop, T.secs(90).msecs())
         }
     }
 

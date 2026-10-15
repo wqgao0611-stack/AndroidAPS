@@ -1,0 +1,255 @@
+diff --git a/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/AutomationPlugin.kt b/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/AutomationPlugin.kt
+index 1e1905a..652a9eb 100644
+--- a/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/AutomationPlugin.kt
++++ b/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/AutomationPlugin.kt
+@@ -60,6 +60,7 @@ import app.aaps.plugins.automation.triggers.TriggerBg
+ import app.aaps.plugins.automation.triggers.TriggerBolusAgo
+ import app.aaps.plugins.automation.triggers.TriggerCOB
+ import app.aaps.plugins.automation.triggers.TriggerCannulaAge
++import app.aaps.plugins.automation.triggers.TriggerCarbsAgo
+ import app.aaps.plugins.automation.triggers.TriggerConnector
+ import app.aaps.plugins.automation.triggers.TriggerDelta
+ import app.aaps.plugins.automation.triggers.TriggerHeartRate
+@@ -420,6 +421,7 @@ class AutomationPlugin @Inject constructor(
+             TriggerLocation(injector),
+             TriggerAutosensValue(injector),
+             TriggerBolusAgo(injector),
++            TriggerCarbsAgo(injector),
+             TriggerPumpLastConnection(injector),
+             TriggerBTDevice(injector),
+             TriggerHeartRate(injector),
+diff --git a/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/di/AutomationModule.kt b/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/di/AutomationModule.kt
+index 94b30a6..4cb79af 100644
+--- a/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/di/AutomationModule.kt
++++ b/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/di/AutomationModule.kt
+@@ -35,6 +35,7 @@ import app.aaps.plugins.automation.triggers.TriggerBg
+ import app.aaps.plugins.automation.triggers.TriggerBolusAgo
+ import app.aaps.plugins.automation.triggers.TriggerCOB
+ import app.aaps.plugins.automation.triggers.TriggerCannulaAge
++import app.aaps.plugins.automation.triggers.TriggerCarbsAgo
+ import app.aaps.plugins.automation.triggers.TriggerConnector
+ import app.aaps.plugins.automation.triggers.TriggerDelta
+ import app.aaps.plugins.automation.triggers.TriggerDummy
+@@ -81,6 +82,7 @@ abstract class AutomationModule {
+     @ContributesAndroidInjector abstract fun triggerAutosensValueInjector(): TriggerAutosensValue
+     @ContributesAndroidInjector abstract fun triggerBgInjector(): TriggerBg
+     @ContributesAndroidInjector abstract fun triggerBolusAgoInjector(): TriggerBolusAgo
++    @ContributesAndroidInjector abstract fun triggerCarbsAgoInjector(): TriggerCarbsAgo
+     @ContributesAndroidInjector abstract fun triggerSensorAgeInjector(): TriggerSensorAge
+     @ContributesAndroidInjector abstract fun triggerPadChangeInjector(): TriggerPodChange
+     @ContributesAndroidInjector abstract fun triggerCanulaAgeInjector(): TriggerCannulaAge
+diff --git a/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/triggers/Trigger.kt b/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/triggers/Trigger.kt
+index 5337439..3df4ed8 100644
+--- a/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/triggers/Trigger.kt
++++ b/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/triggers/Trigger.kt
+@@ -91,6 +91,7 @@ abstract class Trigger(val injector: HasAndroidInjector) {
+                 TriggerAutosensValue::class.java.simpleName      -> TriggerAutosensValue(injector).fromJSON(data.toString())
+                 TriggerBg::class.java.simpleName                 -> TriggerBg(injector).fromJSON(data.toString())
+                 TriggerBolusAgo::class.java.simpleName           -> TriggerBolusAgo(injector).fromJSON(data.toString())
++                TriggerCarbsAgo::class.java.simpleName           -> TriggerCarbsAgo(injector).fromJSON(data.toString())
+                 TriggerBTDevice::class.java.simpleName           -> TriggerBTDevice(injector).fromJSON(data.toString())
+                 TriggerSensorAge::class.java.simpleName          -> TriggerSensorAge(injector).fromJSON(data.toString())
+                 TriggerCannulaAge::class.java.simpleName         -> TriggerCannulaAge(injector).fromJSON(data.toString())
+diff --git a/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/triggers/TriggerCarbsAgo.kt b/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/triggers/TriggerCarbsAgo.kt
+new file mode 100644
+index 0000000..f87cd94
+--- /dev/null
++++ b/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/triggers/TriggerCarbsAgo.kt
+@@ -0,0 +1,87 @@
++package app.aaps.plugins.automation.triggers
++
++import android.widget.LinearLayout
++import app.aaps.core.interfaces.logging.LTag
++import app.aaps.core.utils.JsonHelper
++import app.aaps.core.utils.JsonHelper.safeGetString
++import app.aaps.plugins.automation.R
++import app.aaps.plugins.automation.elements.Comparator
++import app.aaps.plugins.automation.elements.InputDuration
++import app.aaps.plugins.automation.elements.LabelWithElement
++import app.aaps.plugins.automation.elements.LayoutBuilder
++import app.aaps.plugins.automation.elements.StaticLabel
++import dagger.android.HasAndroidInjector
++import org.json.JSONObject
++import java.util.Optional
++
++class TriggerCarbsAgo(injector: HasAndroidInjector) : Trigger(injector) {
++
++    var minutesAgo: InputDuration = InputDuration(30, InputDuration.TimeUnit.MINUTES)
++    var comparator: Comparator = Comparator(rh)
++
++    private constructor(injector: HasAndroidInjector, triggerCarbsAgo: TriggerCarbsAgo) : this(injector) {
++        minutesAgo = InputDuration(triggerCarbsAgo.minutesAgo.value, InputDuration.TimeUnit.MINUTES)
++        comparator = Comparator(rh, triggerCarbsAgo.comparator.value)
++    }
++
++    fun setValue(value: Int): TriggerCarbsAgo {
++        minutesAgo.value = value
++        return this
++    }
++
++    fun comparator(comparator: Comparator.Compare): TriggerCarbsAgo {
++        this.comparator.value = comparator
++        return this
++    }
++
++    override fun shouldRun(): Boolean {
++        val lastCarbs = persistenceLayer.getNewestCarbs()
++        val lastCarbsTime = lastCarbs?.timestamp ?: 0L
++        if (lastCarbsTime == 0L)
++            return if (comparator.value == Comparator.Compare.IS_NOT_AVAILABLE) {
++                aapsLogger.debug(LTag.AUTOMATION, "Ready for execution: " + friendlyDescription())
++                true
++            } else {
++                aapsLogger.debug(LTag.AUTOMATION, "NOT ready for execution: " + friendlyDescription())
++                false
++            }
++        val last = (dateUtil.now() - lastCarbsTime).toDouble() / (60 * 1000)
++        aapsLogger.debug(LTag.AUTOMATION, "LastCarbs min ago: $minutesAgo")
++        val doRun = comparator.value.check(last.toInt(), minutesAgo.getMinutes())
++        if (doRun) {
++            aapsLogger.debug(LTag.AUTOMATION, "Ready for execution: " + friendlyDescription())
++            return true
++        }
++        aapsLogger.debug(LTag.AUTOMATION, "NOT ready for execution: " + friendlyDescription())
++        return false
++    }
++
++    override fun dataJSON(): JSONObject =
++        JSONObject()
++            .put("minutesAgo", minutesAgo.value)
++            .put("comparator", comparator.value.toString())
++
++    override fun fromJSON(data: String): Trigger {
++        val d = JSONObject(data)
++        minutesAgo.setMinutes(JsonHelper.safeGetInt(d, "minutesAgo"))
++        comparator.setValue(Comparator.Compare.valueOf(safeGetString(d, "comparator")!!))
++        return this
++    }
++
++    override fun friendlyName(): Int = R.string.lastcarbslabel
++
++    override fun friendlyDescription(): String =
++        rh.gs(R.string.lastcarbscompared, rh.gs(comparator.value.stringRes), minutesAgo.getMinutes())
++
++    override fun icon(): Optional<Int> = Optional.of(app.aaps.core.objects.R.drawable.ic_cp_bolus_carbs)
++
++    override fun duplicate(): Trigger = TriggerCarbsAgo(injector, this)
++
++    override fun generateDialog(root: LinearLayout) {
++        LayoutBuilder()
++            .add(StaticLabel(rh, R.string.lastcarbslabel, this))
++            .add(comparator)
++            .add(LabelWithElement(rh, rh.gs(R.string.lastcarbslabel) + ": ", rh.gs(app.aaps.core.interfaces.R.string.unit_minutes), minutesAgo))
++            .build(root)
++    }
++}
+diff --git a/plugins/automation/src/main/res/values/strings.xml b/plugins/automation/src/main/res/values/strings.xml
+index 62be8de..2b49853 100644
+--- a/plugins/automation/src/main/res/values/strings.xml
++++ b/plugins/automation/src/main/res/values/strings.xml
+@@ -86,6 +86,8 @@
+     <string name="target_u">Target [%1$s]:</string>
+     <string name="lastboluslabel">Last bolus ago</string>
+     <string name="lastboluscompared">Last bolus time %1$s %2$s min ago</string>
++    <string name="lastcarbslabel">Last carbs ago</string>
++    <string name="lastcarbscompared">Last carbs time %1$s %2$s min ago</string>
+     <string name="triggercoblabel">COB</string>
+     <string name="cobcompared">COB %1$s %2$.0f</string>
+     <string name="triggerHeartRate">Heart Rate</string>
+diff --git a/plugins/automation/src/test/kotlin/app/aaps/plugins/automation/triggers/TriggerCarbsAgoTest.kt b/plugins/automation/src/test/kotlin/app/aaps/plugins/automation/triggers/TriggerCarbsAgoTest.kt
+new file mode 100644
+index 0000000..03e3121
+--- /dev/null
++++ b/plugins/automation/src/test/kotlin/app/aaps/plugins/automation/triggers/TriggerCarbsAgoTest.kt
+@@ -0,0 +1,91 @@
++package app.aaps.plugins.automation.triggers
++
++import app.aaps.core.data.model.CA
++import app.aaps.plugins.automation.elements.Comparator
++import com.google.common.truth.Truth.assertThat
++import org.json.JSONException
++import org.json.JSONObject
++import org.junit.jupiter.api.Test
++import org.mockito.Mockito.`when`
++import org.skyscreamer.jsonassert.JSONAssert
++
++class TriggerCarbsAgoTest : TriggerTestBase() {
++
++    @Test
++    fun shouldRunTest() {
++        // Set last carbs time to now
++        `when`(persistenceLayer.getNewestCarbs()).thenReturn(
++            CA(
++                timestamp = now,
++                amount = 0.0,
++                duration = 0
++            )
++        )
++        `when`(dateUtil.now()).thenReturn(now + 10 * 60 * 1000) // set current time to now + 10 min
++        var t = TriggerCarbsAgo(injector).setValue(110).comparator(Comparator.Compare.IS_EQUAL)
++        assertThat(t.minutesAgo.value).isEqualTo(110)
++        assertThat(t.comparator.value).isEqualTo(Comparator.Compare.IS_EQUAL)
++        assertThat(t.shouldRun()).isFalse()
++        t = TriggerCarbsAgo(injector).setValue(10).comparator(Comparator.Compare.IS_EQUAL)
++        assertThat(t.minutesAgo.value).isEqualTo(10)
++        assertThat(t.shouldRun()).isTrue()
++        t = TriggerCarbsAgo(injector).setValue(5).comparator(Comparator.Compare.IS_EQUAL_OR_GREATER)
++        assertThat(t.shouldRun()).isTrue()
++        t = TriggerCarbsAgo(injector).setValue(310).comparator(Comparator.Compare.IS_EQUAL_OR_LESSER)
++        assertThat(t.shouldRun()).isTrue()
++        t = TriggerCarbsAgo(injector).setValue(420).comparator(Comparator.Compare.IS_EQUAL)
++        assertThat(t.shouldRun()).isFalse()
++        t = TriggerCarbsAgo(injector).setValue(390).comparator(Comparator.Compare.IS_EQUAL_OR_LESSER)
++        assertThat(t.shouldRun()).isTrue()
++        t = TriggerCarbsAgo(injector).setValue(390).comparator(Comparator.Compare.IS_EQUAL_OR_GREATER)
++        assertThat(t.shouldRun()).isFalse()
++        t = TriggerCarbsAgo(injector).setValue(2).comparator(Comparator.Compare.IS_EQUAL_OR_GREATER)
++        assertThat(t.shouldRun()).isTrue()
++        t = TriggerCarbsAgo(injector).setValue(390).comparator(Comparator.Compare.IS_EQUAL_OR_LESSER)
++        assertThat(t.shouldRun()).isTrue()
++        // Set last carbs time to 0
++        `when`(persistenceLayer.getNewestCarbs()).thenReturn(
++            CA(
++                timestamp = 0,
++                amount = 0.0,
++                duration = 0
++            )
++        )
++        t = TriggerCarbsAgo(injector).comparator(Comparator.Compare.IS_NOT_AVAILABLE)
++        assertThat(t.shouldRun()).isTrue()
++    }
++
++    @Test
++    fun shouldRunWithoutCarbsTest() {
++        // No carbs recorded at all
++        `when`(persistenceLayer.getNewestCarbs()).thenReturn(null)
++        var t = TriggerCarbsAgo(injector).setValue(10).comparator(Comparator.Compare.IS_EQUAL)
++        assertThat(t.shouldRun()).isFalse()
++        t = TriggerCarbsAgo(injector).comparator(Comparator.Compare.IS_NOT_AVAILABLE)
++        assertThat(t.shouldRun()).isTrue()
++    }
++
++    @Test fun copyConstructorTest() {
++        val t: TriggerCarbsAgo = TriggerCarbsAgo(injector).setValue(213).comparator(Comparator.Compare.IS_EQUAL_OR_LESSER)
++        val t1 = t.duplicate() as TriggerCarbsAgo
++        assertThat(t1.minutesAgo.value).isEqualTo(213)
++        assertThat(t.comparator.value).isEqualTo(Comparator.Compare.IS_EQUAL_OR_LESSER)
++    }
++
++    private var lcJson = "{\"data\":{\"comparator\":\"IS_EQUAL\",\"minutesAgo\":410},\"type\":\"TriggerCarbsAgo\"}"
++    @Test fun toJSONTest() {
++        val t: TriggerCarbsAgo = TriggerCarbsAgo(injector).setValue(410).comparator(Comparator.Compare.IS_EQUAL)
++        JSONAssert.assertEquals(lcJson, t.toJSON(), true)
++    }
++
++    @Test @Throws(JSONException::class) fun fromJSONTest() {
++        val t: TriggerCarbsAgo = TriggerCarbsAgo(injector).setValue(410).comparator(Comparator.Compare.IS_EQUAL)
++        val t2 = TriggerDummy(injector).instantiate(JSONObject(t.toJSON())) as TriggerCarbsAgo
++        assertThat(t2.comparator.value).isEqualTo(Comparator.Compare.IS_EQUAL)
++        assertThat(t2.minutesAgo.value).isEqualTo(410)
++    }
++
++    @Test fun iconTest() {
++        assertThat(TriggerCarbsAgo(injector).icon().get()).isEqualTo(app.aaps.core.objects.R.drawable.ic_cp_bolus_carbs)
++    }
++}

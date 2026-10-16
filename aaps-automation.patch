@@ -1,57 +1,5 @@
-diff --git a/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/AutomationPlugin.kt b/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/AutomationPlugin.kt
-index 8c48929..823de4c 100644
---- a/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/AutomationPlugin.kt
-+++ b/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/AutomationPlugin.kt
-@@ -42,6 +42,8 @@ import app.aaps.plugins.automation.actions.ActionProfileSwitch
- import app.aaps.plugins.automation.actions.ActionProfileSwitchPercent
- import app.aaps.plugins.automation.actions.ActionRunAutotune
- import app.aaps.plugins.automation.actions.ActionSendSMS
-+import app.aaps.plugins.automation.actions.ActionSetSmbMinutes
-+import app.aaps.plugins.automation.actions.ActionSetUamMinutes
- import app.aaps.plugins.automation.actions.ActionSettingsExport
- import app.aaps.plugins.automation.actions.ActionStartTempTarget
- import app.aaps.plugins.automation.actions.ActionStopProcessing
-@@ -60,6 +62,7 @@ import app.aaps.plugins.automation.triggers.TriggerBg
- import app.aaps.plugins.automation.triggers.TriggerBolusAgo
- import app.aaps.plugins.automation.triggers.TriggerCOB
- import app.aaps.plugins.automation.triggers.TriggerCannulaAge
-+import app.aaps.plugins.automation.triggers.TriggerCarbsAgo
- import app.aaps.plugins.automation.triggers.TriggerConnector
- import app.aaps.plugins.automation.triggers.TriggerDelta
- import app.aaps.plugins.automation.triggers.TriggerHeartRate
-@@ -396,6 +399,8 @@ class AutomationPlugin @Inject constructor(
-             ActionProfileSwitchPercent(injector),
-             ActionProfileSwitch(injector),
-             ActionSendSMS(injector),
-+            ActionSetSmbMinutes(injector),
-+            ActionSetUamMinutes(injector)
-         )
-         if (config.isEngineeringMode() && config.isDev())
-             actions.add(ActionRunAutotune(injector))
-@@ -420,6 +425,7 @@ class AutomationPlugin @Inject constructor(
-             TriggerLocation(injector),
-             TriggerAutosensValue(injector),
-             TriggerBolusAgo(injector),
-+            TriggerCarbsAgo(injector),
-             TriggerPumpLastConnection(injector),
-             TriggerBTDevice(injector),
-             TriggerHeartRate(injector),
-diff --git a/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/actions/Action.kt b/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/actions/Action.kt
-index b6ef6b1..a0e090e 100644
---- a/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/actions/Action.kt
-+++ b/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/actions/Action.kt
-@@ -70,6 +70,8 @@ abstract class Action(val injector: HasAndroidInjector) {
-                 ActionProfileSwitchPercent::class.java.simpleName -> ActionProfileSwitchPercent(injector).fromJSON(data.toString())
-                 ActionRunAutotune::class.java.simpleName          -> ActionRunAutotune(injector).fromJSON(data.toString())
-                 ActionSendSMS::class.java.simpleName              -> ActionSendSMS(injector).fromJSON(data.toString())
-+                ActionSetSmbMinutes::class.java.simpleName        -> ActionSetSmbMinutes(injector).fromJSON(data.toString())
-+                ActionSetUamMinutes::class.java.simpleName        -> ActionSetUamMinutes(injector).fromJSON(data.toString())
-                 ActionStartTempTarget::class.java.simpleName      -> ActionStartTempTarget(injector).fromJSON(data.toString())
-                 ActionStopTempTarget::class.java.simpleName       -> ActionStopTempTarget(injector).fromJSON(data.toString())
-                 else                                              -> throw ClassNotFoundException(type)
 diff --git a/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/actions/ActionSetSmbMinutes.kt b/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/actions/ActionSetSmbMinutes.kt
 new file mode 100644
-index 0000000..ee53744
 --- /dev/null
 +++ b/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/actions/ActionSetSmbMinutes.kt
 @@ -0,0 +1,114 @@
@@ -63,7 +11,7 @@ index 0000000..ee53744
 +import app.aaps.core.interfaces.queue.Callback
 +import app.aaps.core.keys.BooleanKey
 +import app.aaps.core.keys.IntKey
-+import app.aaps.core.keys.Preferences
++import app.aaps.core.keys.interfaces.Preferences
 +import app.aaps.core.utils.JsonHelper.safeGetDouble
 +import app.aaps.plugins.automation.R
 +import app.aaps.plugins.automation.elements.InputDouble
@@ -171,7 +119,6 @@ index 0000000..ee53744
 +}
 diff --git a/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/actions/ActionSetUamMinutes.kt b/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/actions/ActionSetUamMinutes.kt
 new file mode 100644
-index 0000000..ea2aca7
 --- /dev/null
 +++ b/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/actions/ActionSetUamMinutes.kt
 @@ -0,0 +1,115 @@
@@ -183,7 +130,7 @@ index 0000000..ea2aca7
 +import app.aaps.core.interfaces.queue.Callback
 +import app.aaps.core.keys.BooleanKey
 +import app.aaps.core.keys.IntKey
-+import app.aaps.core.keys.Preferences
++import app.aaps.core.keys.interfaces.Preferences
 +import app.aaps.core.utils.JsonHelper.safeGetDouble
 +import app.aaps.plugins.automation.R
 +import app.aaps.plugins.automation.elements.InputDouble
@@ -290,59 +237,8 @@ index 0000000..ea2aca7
 +        return this
 +    }
 +}
-diff --git a/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/di/AutomationModule.kt b/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/di/AutomationModule.kt
-index 94b30a6..b459880 100644
---- a/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/di/AutomationModule.kt
-+++ b/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/di/AutomationModule.kt
-@@ -18,6 +18,8 @@ import app.aaps.plugins.automation.actions.ActionProfileSwitch
- import app.aaps.plugins.automation.actions.ActionProfileSwitchPercent
- import app.aaps.plugins.automation.actions.ActionRunAutotune
- import app.aaps.plugins.automation.actions.ActionSendSMS
-+import app.aaps.plugins.automation.actions.ActionSetSmbMinutes
-+import app.aaps.plugins.automation.actions.ActionSetUamMinutes
- import app.aaps.plugins.automation.actions.ActionStartTempTarget
- import app.aaps.plugins.automation.actions.ActionStopProcessing
- import app.aaps.plugins.automation.actions.ActionStopTempTarget
-@@ -35,6 +37,7 @@ import app.aaps.plugins.automation.triggers.TriggerBg
- import app.aaps.plugins.automation.triggers.TriggerBolusAgo
- import app.aaps.plugins.automation.triggers.TriggerCOB
- import app.aaps.plugins.automation.triggers.TriggerCannulaAge
-+import app.aaps.plugins.automation.triggers.TriggerCarbsAgo
- import app.aaps.plugins.automation.triggers.TriggerConnector
- import app.aaps.plugins.automation.triggers.TriggerDelta
- import app.aaps.plugins.automation.triggers.TriggerDummy
-@@ -81,6 +84,7 @@ abstract class AutomationModule {
-     @ContributesAndroidInjector abstract fun triggerAutosensValueInjector(): TriggerAutosensValue
-     @ContributesAndroidInjector abstract fun triggerBgInjector(): TriggerBg
-     @ContributesAndroidInjector abstract fun triggerBolusAgoInjector(): TriggerBolusAgo
-+    @ContributesAndroidInjector abstract fun triggerCarbsAgoInjector(): TriggerCarbsAgo
-     @ContributesAndroidInjector abstract fun triggerSensorAgeInjector(): TriggerSensorAge
-     @ContributesAndroidInjector abstract fun triggerPadChangeInjector(): TriggerPodChange
-     @ContributesAndroidInjector abstract fun triggerCanulaAgeInjector(): TriggerCannulaAge
-@@ -120,6 +124,8 @@ abstract class AutomationModule {
-     @ContributesAndroidInjector abstract fun actionProfileSwitchPercentInjector(): ActionProfileSwitchPercent
-     @ContributesAndroidInjector abstract fun actionRunAutotuneInjector(): ActionRunAutotune
-     @ContributesAndroidInjector abstract fun actionSendSMSInjector(): ActionSendSMS
-+    @ContributesAndroidInjector abstract fun actionSetSmbMinutesInjector(): ActionSetSmbMinutes
-+    @ContributesAndroidInjector abstract fun actionSetUamMinutesInjector(): ActionSetUamMinutes
-     @ContributesAndroidInjector abstract fun actionStartTempTargetInjector(): ActionStartTempTarget
-     @ContributesAndroidInjector abstract fun actionStopTempTargetInjector(): ActionStopTempTarget
-     @ContributesAndroidInjector abstract fun actionDummyInjector(): ActionDummy
-diff --git a/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/triggers/Trigger.kt b/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/triggers/Trigger.kt
-index 5337439..3df4ed8 100644
---- a/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/triggers/Trigger.kt
-+++ b/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/triggers/Trigger.kt
-@@ -91,6 +91,7 @@ abstract class Trigger(val injector: HasAndroidInjector) {
-                 TriggerAutosensValue::class.java.simpleName      -> TriggerAutosensValue(injector).fromJSON(data.toString())
-                 TriggerBg::class.java.simpleName                 -> TriggerBg(injector).fromJSON(data.toString())
-                 TriggerBolusAgo::class.java.simpleName           -> TriggerBolusAgo(injector).fromJSON(data.toString())
-+                TriggerCarbsAgo::class.java.simpleName           -> TriggerCarbsAgo(injector).fromJSON(data.toString())
-                 TriggerBTDevice::class.java.simpleName           -> TriggerBTDevice(injector).fromJSON(data.toString())
-                 TriggerSensorAge::class.java.simpleName          -> TriggerSensorAge(injector).fromJSON(data.toString())
-                 TriggerCannulaAge::class.java.simpleName         -> TriggerCannulaAge(injector).fromJSON(data.toString())
 diff --git a/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/triggers/TriggerCarbsAgo.kt b/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/triggers/TriggerCarbsAgo.kt
 new file mode 100644
-index 0000000..f87cd94
 --- /dev/null
 +++ b/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/triggers/TriggerCarbsAgo.kt
 @@ -0,0 +1,87 @@
@@ -433,35 +329,8 @@ index 0000000..f87cd94
 +            .build(root)
 +    }
 +}
-diff --git a/plugins/automation/src/main/res/values/strings.xml b/plugins/automation/src/main/res/values/strings.xml
-index 62be8de..d0aaef6 100644
---- a/plugins/automation/src/main/res/values/strings.xml
-+++ b/plugins/automation/src/main/res/values/strings.xml
-@@ -86,6 +86,8 @@
-     <string name="target_u">Target [%1$s]:</string>
-     <string name="lastboluslabel">Last bolus ago</string>
-     <string name="lastboluscompared">Last bolus time %1$s %2$s min ago</string>
-+    <string name="lastcarbslabel">Last carbs ago</string>
-+    <string name="lastcarbscompared">Last carbs time %1$s %2$s min ago</string>
-     <string name="triggercoblabel">COB</string>
-     <string name="cobcompared">COB %1$s %2$.0f</string>
-     <string name="triggerHeartRate">Heart Rate</string>
-@@ -133,6 +135,12 @@
-     <string name="time_to_bolus">Time to bolus!\nRun Bolus wizard and do calculation again.</string>
-     <string name="error_setting_reminder">Error while setting future alarm</string>
- 
-+    <!--    Set SMB max minutes-->
-+    <string name="smbsetminuteslabel">SMB max minutes</string>
-+    <string name="smbsetminutesdesc">Set SMB max minutes to %1$d</string>
-+    <string name="uamsetminuteslabel">UAM SMB max minutes</string>
-+    <string name="uamsetminutesdesc">Set UAM SMB max minutes to %1$d</string>
-+
-     <!--    Autotune-->
-     <string name="autotune_profile_name">Autotune profile %1$s</string>
-     <string name="autotune_run">Run Autotune</string>
 diff --git a/plugins/automation/src/test/kotlin/app/aaps/plugins/automation/actions/ActionSetSmbMinutesTest.kt b/plugins/automation/src/test/kotlin/app/aaps/plugins/automation/actions/ActionSetSmbMinutesTest.kt
 new file mode 100644
-index 0000000..6ffbb77
 --- /dev/null
 +++ b/plugins/automation/src/test/kotlin/app/aaps/plugins/automation/actions/ActionSetSmbMinutesTest.kt
 @@ -0,0 +1,100 @@
@@ -567,7 +436,6 @@ index 0000000..6ffbb77
 +}
 diff --git a/plugins/automation/src/test/kotlin/app/aaps/plugins/automation/actions/ActionSetUamMinutesTest.kt b/plugins/automation/src/test/kotlin/app/aaps/plugins/automation/actions/ActionSetUamMinutesTest.kt
 new file mode 100644
-index 0000000..aabffb6
 --- /dev/null
 +++ b/plugins/automation/src/test/kotlin/app/aaps/plugins/automation/actions/ActionSetUamMinutesTest.kt
 @@ -0,0 +1,102 @@
@@ -673,26 +541,8 @@ index 0000000..aabffb6
 +        assertThat(sut.minutes.value).isEqualTo(75.0)
 +    }
 +}
-diff --git a/plugins/automation/src/test/kotlin/app/aaps/plugins/automation/actions/ActionsTestBase.kt b/plugins/automation/src/test/kotlin/app/aaps/plugins/automation/actions/ActionsTestBase.kt
-index 2449763..26754b6 100644
---- a/plugins/automation/src/test/kotlin/app/aaps/plugins/automation/actions/ActionsTestBase.kt
-+++ b/plugins/automation/src/test/kotlin/app/aaps/plugins/automation/actions/ActionsTestBase.kt
-@@ -129,6 +129,12 @@ ActionsTestBase : TestBaseWithProfile() {
-                 it.dateUtil = dateUtil
-                 it.profileFunction = profileFunction
-             }
-+            if (it is ActionSetSmbMinutes) {
-+                it.preferences = preferences
-+            }
-+            if (it is ActionSetUamMinutes) {
-+                it.preferences = preferences
-+            }
-             if (it is Trigger) {
-                 it.rh = rh
-                 it.profileFunction = profileFunction
 diff --git a/plugins/automation/src/test/kotlin/app/aaps/plugins/automation/triggers/TriggerCarbsAgoTest.kt b/plugins/automation/src/test/kotlin/app/aaps/plugins/automation/triggers/TriggerCarbsAgoTest.kt
 new file mode 100644
-index 0000000..03e3121
 --- /dev/null
 +++ b/plugins/automation/src/test/kotlin/app/aaps/plugins/automation/triggers/TriggerCarbsAgoTest.kt
 @@ -0,0 +1,91 @@
@@ -787,3 +637,141 @@ index 0000000..03e3121
 +        assertThat(TriggerCarbsAgo(injector).icon().get()).isEqualTo(app.aaps.core.objects.R.drawable.ic_cp_bolus_carbs)
 +    }
 +}
+diff --git a/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/AutomationPlugin.kt b/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/AutomationPlugin.kt
+--- a/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/AutomationPlugin.kt
++++ b/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/AutomationPlugin.kt
+@@ -45,6 +45,8 @@
+ import app.aaps.plugins.automation.actions.ActionSMBChange
+ import app.aaps.plugins.automation.actions.ActionSendSMS
+ import app.aaps.plugins.automation.actions.ActionSettingsExport
++import app.aaps.plugins.automation.actions.ActionSetSmbMinutes
++import app.aaps.plugins.automation.actions.ActionSetUamMinutes
+ import app.aaps.plugins.automation.actions.ActionStartTempTarget
+ import app.aaps.plugins.automation.actions.ActionStopProcessing
+ import app.aaps.plugins.automation.actions.ActionStopTempTarget
+@@ -62,6 +64,7 @@
+ import app.aaps.plugins.automation.triggers.TriggerBolusAgo
+ import app.aaps.plugins.automation.triggers.TriggerCOB
+ import app.aaps.plugins.automation.triggers.TriggerCannulaAge
++import app.aaps.plugins.automation.triggers.TriggerCarbsAgo
+ import app.aaps.plugins.automation.triggers.TriggerConnector
+ import app.aaps.plugins.automation.triggers.TriggerDelta
+ import app.aaps.plugins.automation.triggers.TriggerHeartRate
+@@ -401,6 +404,8 @@
+             ActionProfileSwitchPercent(injector),
+             ActionProfileSwitch(injector),
+             ActionSendSMS(injector),
++            ActionSetSmbMinutes(injector),
++            ActionSetUamMinutes(injector),
+             ActionSMBChange(injector)
+         )
+         if (config.isEngineeringMode() && config.isDev())
+@@ -426,6 +431,7 @@
+             TriggerLocation(injector),
+             TriggerAutosensValue(injector),
+             TriggerBolusAgo(injector),
++            TriggerCarbsAgo(injector),
+             TriggerPumpLastConnection(injector),
+             TriggerBTDevice(injector),
+             TriggerHeartRate(injector),
+diff --git a/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/actions/Action.kt b/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/actions/Action.kt
+--- a/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/actions/Action.kt
++++ b/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/actions/Action.kt
+@@ -67,6 +67,8 @@
+                 ActionProfileSwitchPercent::class.java.simpleName -> ActionProfileSwitchPercent(injector).fromJSON(data.toString())
+                 ActionRunAutotune::class.java.simpleName          -> ActionRunAutotune(injector).fromJSON(data.toString())
+                 ActionSendSMS::class.java.simpleName              -> ActionSendSMS(injector).fromJSON(data.toString())
++                ActionSetSmbMinutes::class.java.simpleName        -> ActionSetSmbMinutes(injector).fromJSON(data.toString())
++                ActionSetUamMinutes::class.java.simpleName        -> ActionSetUamMinutes(injector).fromJSON(data.toString())
+                 ActionStartTempTarget::class.java.simpleName      -> ActionStartTempTarget(injector).fromJSON(data.toString())
+                 ActionStopProcessing::class.java.simpleName       -> ActionStopProcessing(injector).fromJSON(data.toString())
+                 ActionStopTempTarget::class.java.simpleName       -> ActionStopTempTarget(injector).fromJSON(data.toString())
+diff --git a/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/di/AutomationModule.kt b/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/di/AutomationModule.kt
+--- a/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/di/AutomationModule.kt
++++ b/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/di/AutomationModule.kt
+@@ -15,6 +15,8 @@
+ import app.aaps.plugins.automation.actions.ActionSMBChange
+ import app.aaps.plugins.automation.actions.ActionSendSMS
+ import app.aaps.plugins.automation.actions.ActionSettingsExport
++import app.aaps.plugins.automation.actions.ActionSetSmbMinutes
++import app.aaps.plugins.automation.actions.ActionSetUamMinutes
+ import app.aaps.plugins.automation.actions.ActionStartTempTarget
+ import app.aaps.plugins.automation.actions.ActionStopProcessing
+ import app.aaps.plugins.automation.actions.ActionStopTempTarget
+@@ -32,6 +34,7 @@
+ import app.aaps.plugins.automation.triggers.TriggerBolusAgo
+ import app.aaps.plugins.automation.triggers.TriggerCOB
+ import app.aaps.plugins.automation.triggers.TriggerCannulaAge
++import app.aaps.plugins.automation.triggers.TriggerCarbsAgo
+ import app.aaps.plugins.automation.triggers.TriggerConnector
+ import app.aaps.plugins.automation.triggers.TriggerDelta
+ import app.aaps.plugins.automation.triggers.TriggerDummy
+@@ -78,6 +81,7 @@
+     @ContributesAndroidInjector abstract fun triggerAutosensValueInjector(): TriggerAutosensValue
+     @ContributesAndroidInjector abstract fun triggerBgInjector(): TriggerBg
+     @ContributesAndroidInjector abstract fun triggerBolusAgoInjector(): TriggerBolusAgo
++    @ContributesAndroidInjector abstract fun triggerCarbsAgoInjector(): TriggerCarbsAgo
+     @ContributesAndroidInjector abstract fun triggerSensorAgeInjector(): TriggerSensorAge
+     @ContributesAndroidInjector abstract fun triggerPadChangeInjector(): TriggerPodChange
+     @ContributesAndroidInjector abstract fun triggerCannulaAgeInjector(): TriggerCannulaAge
+@@ -114,6 +118,8 @@
+     @ContributesAndroidInjector abstract fun actionProfileSwitchPercentInjector(): ActionProfileSwitchPercent
+     @ContributesAndroidInjector abstract fun actionRunAutotuneInjector(): ActionRunAutotune
+     @ContributesAndroidInjector abstract fun actionSendSMSInjector(): ActionSendSMS
++    @ContributesAndroidInjector abstract fun actionSetSmbMinutesInjector(): ActionSetSmbMinutes
++    @ContributesAndroidInjector abstract fun actionSetUamMinutesInjector(): ActionSetUamMinutes
+     @ContributesAndroidInjector abstract fun actionStartTempTargetInjector(): ActionStartTempTarget
+     @ContributesAndroidInjector abstract fun actionStopTempTargetInjector(): ActionStopTempTarget
+     @ContributesAndroidInjector abstract fun actionDummyInjector(): ActionDummy
+diff --git a/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/triggers/Trigger.kt b/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/triggers/Trigger.kt
+--- a/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/triggers/Trigger.kt
++++ b/plugins/automation/src/main/kotlin/app/aaps/plugins/automation/triggers/Trigger.kt
+@@ -91,6 +91,7 @@
+                 TriggerAutosensValue::class.java.simpleName      -> TriggerAutosensValue(injector).fromJSON(data.toString())
+                 TriggerBg::class.java.simpleName                 -> TriggerBg(injector).fromJSON(data.toString())
+                 TriggerBolusAgo::class.java.simpleName           -> TriggerBolusAgo(injector).fromJSON(data.toString())
++                TriggerCarbsAgo::class.java.simpleName           -> TriggerCarbsAgo(injector).fromJSON(data.toString())
+                 TriggerBTDevice::class.java.simpleName           -> TriggerBTDevice(injector).fromJSON(data.toString())
+                 TriggerSensorAge::class.java.simpleName          -> TriggerSensorAge(injector).fromJSON(data.toString())
+                 TriggerCannulaAge::class.java.simpleName         -> TriggerCannulaAge(injector).fromJSON(data.toString())
+diff --git a/plugins/automation/src/main/res/values/strings.xml b/plugins/automation/src/main/res/values/strings.xml
+--- a/plugins/automation/src/main/res/values/strings.xml
++++ b/plugins/automation/src/main/res/values/strings.xml
+@@ -86,6 +86,8 @@
+     <string name="target_u">Target [%1$s]:</string>
+     <string name="lastboluslabel">Last bolus ago</string>
+     <string name="lastboluscompared">Last bolus time %1$s %2$s min ago</string>
++    <string name="lastcarbslabel">Last carbs ago</string>
++    <string name="lastcarbscompared">Last carbs time %1$s %2$s min ago</string>
+     <string name="triggercoblabel">COB</string>
+     <string name="cobcompared">COB %1$s %2$.0f</string>
+     <string name="triggerHeartRate">Heart Rate</string>
+@@ -133,6 +135,12 @@
+     <string name="time_to_bolus">Time to bolus!\nRun Bolus wizard and do calculation again.</string>
+     <string name="error_setting_reminder">Error while setting future alarm</string>
+ 
++    <!--    Set SMB max minutes-->
++    <string name="smbsetminuteslabel">SMB max minutes</string>
++    <string name="smbsetminutesdesc">Set SMB max minutes to %1$d</string>
++    <string name="uamsetminuteslabel">UAM SMB max minutes</string>
++    <string name="uamsetminutesdesc">Set UAM SMB max minutes to %1$d</string>
++
+     <!--    Autotune-->
+     <string name="autotune_profile_name">Autotune profile %1$s</string>
+     <string name="autotune_run">Run Autotune</string>
+diff --git a/plugins/automation/src/test/kotlin/app/aaps/plugins/automation/actions/ActionsTestBase.kt b/plugins/automation/src/test/kotlin/app/aaps/plugins/automation/actions/ActionsTestBase.kt
+--- a/plugins/automation/src/test/kotlin/app/aaps/plugins/automation/actions/ActionsTestBase.kt
++++ b/plugins/automation/src/test/kotlin/app/aaps/plugins/automation/actions/ActionsTestBase.kt
+@@ -62,6 +62,12 @@
+                 it.dateUtil = dateUtil
+                 it.profileFunction = profileFunction
+             }
++            if (it is ActionSetSmbMinutes) {
++                it.preferences = preferences
++            }
++            if (it is ActionSetUamMinutes) {
++                it.preferences = preferences
++            }
+             if (it is Trigger) {
+                 it.rh = rh
+                 it.profileFunction = profileFunction

@@ -325,6 +325,35 @@ jobs:
           fi
           echo "✅ All 3 new automation components present and registered."
 
+      # ⚠️ 必须的一步：AAPS 自身的一致性保护
+      #    app/build.gradle.kts 里有：
+      #      if (isMaster() && !allCommitted())
+      #          throw GradleException("There are uncommitted changes. ...")
+      #    isMaster() = 版本号不含 "-" → "3.4.2.6" 为 true，因此该检查生效。
+      #    allCommitted() 执行 `git status -s`，只忽略 .idea/codeStyles 和未跟踪文件(??)。
+      #    checkout 后文件都已跟踪，打完补丁会是 M 状态 → 直接判定失败。
+      #    解决：把补丁改动 commit 掉，让工作区恢复干净（仅本地提交，不会推回远端）。
+      - name: Commit patched sources (AAPS requires clean tree)
+        run: |
+          set -e
+          git config user.email "ci@github.actions.local"
+          git config user.name  "GitHub Actions CI"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "ℹ️ Nothing to commit (tree already clean)."
+          else
+            git commit -q -m "ci: apply aaps-automation.patch (SMB/UAM minutes + CarbsAgo trigger)"
+            echo "✅ Patch changes committed."
+          fi
+          echo "--- git status ---"
+          REMAINING=$(git status -s | grep -v '^??' || true)
+          echo "$REMAINING"
+          if [ -n "$REMAINING" ]; then
+            echo "❌ Working tree still dirty — AAPS will refuse to build."
+            exit 1
+          fi
+          echo "✅ Working tree clean."
+
       - name: Build APKs
         run: |
               ./gradlew :app:assemble${{ env.BUILD_VARIANT }} :wear:assemble${{ env.BUILD_VARIANT }} \

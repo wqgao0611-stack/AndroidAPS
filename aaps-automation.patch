@@ -82,7 +82,7 @@ index 0000000..22035a9
 +                    "but it will have no effect until SMB is enabled in the APS preferences."
 +            )
 +        }
-+        callback.result(instantiator.providePumpEnactResult().success(true).comment(app.aaps.core.ui.R.string.ok)).run()
++        callback.result(pumpEnactResultProvider.get().success(true).comment(app.aaps.core.ui.R.string.ok)).run()
 +    }
 +
 +    override fun isValid(): Boolean =
@@ -203,7 +203,7 @@ index 0000000..777f0c4
 +                    "the new '${key.key}' value is stored, but it will have no effect until they are enabled in the APS preferences."
 +            )
 +        }
-+        callback.result(instantiator.providePumpEnactResult().success(true).comment(app.aaps.core.ui.R.string.ok)).run()
++        callback.result(pumpEnactResultProvider.get().success(true).comment(app.aaps.core.ui.R.string.ok)).run()
 +    }
 +
 +    override fun isValid(): Boolean =

@@ -61,6 +61,14 @@ on:
           - aapsclient2Debug
           - pumpcontrolRelease
           - pumpcontrolDebug
+      applyAutomationPatch:
+        description: 'Apply aaps-automation.patch (master baseline)'
+        required: true
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
 
 jobs:
   build:
@@ -192,12 +200,13 @@ jobs:
           echo "ACCESS_TOKEN=$ACCESS_TOKEN" >> $GITHUB_ENV
           echo "✅ Access token obtained."
 
-      - name: Checkout source code at tag
+      - name: Checkout source code
         uses: actions/checkout@v5
         with:
+          # master 基线：aaps-automation.patch 与 buildSrc/Versions.kt
+          # (appVersion = 3.4.2.6) 均以该分支为准。
+          ref: master
           fetch-depth: 0
-
-
 
       - name: Determine JVM version from tag
         run: |
@@ -213,8 +222,6 @@ jobs:
           done < <(jq -r '.mappings[] | "\(.pattern)\t\(.jdk)"' .github/jdk-map.json)
           echo "JAVA_VERSION=$JAVA_VERSION" >> $GITHUB_ENV
           echo "ℹ️ Tag $TAG → JDK $JAVA_VERSION (from jdk-map.json)"
-
-
 
       - name: Set BUILD_VARIANT
         run: |
@@ -249,6 +256,74 @@ jobs:
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
+
+      # ─────────────────────────────────────────────────────────────
+      #  Automation patch (ActionSetSmbMinutes / ActionSetUamMinutes /
+      #  TriggerCarbsAgo + 注册 + 单测)
+      #  基线：master @ appVersion 3.4.2.6
+      # ─────────────────────────────────────────────────────────────
+      - name: Apply automation patch
+        if: ${{ github.event.inputs.applyAutomationPatch == 'true' }}
+        run: |
+          set -e
+          PATCH="aaps-automation.patch"
+
+          if [ ! -f "$PATCH" ]; then
+            echo "❌ $PATCH not found in repo root"
+            exit 1
+          fi
+          echo "🔧 Applying $PATCH ($(wc -c < "$PATCH") bytes)"
+
+          # 幂等：已打过则跳过
+          if [ -f plugins/automation/src/main/kotlin/app/aaps/plugins/automation/actions/ActionSetSmbMinutes.kt ]; then
+            echo "ℹ️ Patch already applied (ActionSetSmbMinutes.kt exists). Skipping."
+            echo "PATCH_APPLIED=already" >> $GITHUB_ENV
+            exit 0
+          fi
+
+          if git apply --check --ignore-whitespace "$PATCH"; then
+            git apply --ignore-whitespace "$PATCH"
+            echo "✅ Patch applied (direct)"
+          else
+            echo "⚠️ Direct apply failed, trying 3-way merge..."
+            git apply --3way --ignore-whitespace "$PATCH" || {
+              echo "❌ Patch failed to apply. Upstream code may have changed."
+              echo "   Target baseline: master (appVersion 3.4.2.6)"
+              exit 1
+            }
+            echo "✅ Patch applied (3-way)"
+          fi
+
+          git --no-pager diff --stat
+          echo "PATCH_APPLIED=true" >> $GITHUB_ENV
+
+      - name: Verify patch result
+        if: ${{ github.event.inputs.applyAutomationPatch == 'true' }}
+        run: |
+          set -e
+          BASE=plugins/automation/src/main/kotlin/app/aaps/plugins/automation
+          MISSING=0
+          for f in \
+            "$BASE/actions/ActionSetSmbMinutes.kt" \
+            "$BASE/actions/ActionSetUamMinutes.kt" \
+            "$BASE/triggers/TriggerCarbsAgo.kt"
+          do
+            if [ ! -f "$f" ]; then
+              echo "❌ Missing: $f"
+              MISSING=1
+            fi
+          done
+          for sym in ActionSetSmbMinutes ActionSetUamMinutes TriggerCarbsAgo; do
+            if ! grep -rq "$sym" "$BASE/AutomationPlugin.kt" "$BASE/di/AutomationModule.kt"; then
+              echo "❌ Symbol not registered: $sym"
+              MISSING=1
+            fi
+          done
+          if [ "$MISSING" -eq 1 ]; then
+            echo "🛑 Patch verification failed — refusing to build an APK without the automation features."
+            exit 1
+          fi
+          echo "✅ All 3 new automation components present and registered."
 
       - name: Build APKs
         run: |
@@ -353,6 +428,20 @@ jobs:
           upload_to_gdrive "aaps-wear-${VERSION}${VERSION_SUFFIX}.apk" "aaps-wear-${VERSION}${VERSION_SUFFIX}.apk"
 
           echo "🎉 APKs successfully uploaded to Google Drive!"
+
+      - name: Build summary
+        if: always()
+        run: |
+          {
+            echo "## AAPS Build"
+            echo ""
+            echo "- Version: \`${{ env.VERSION }}\`"
+            echo "- Variant: \`${{ env.BUILD_VARIANT }}\`"
+            echo "- JDK: \`${{ env.JAVA_VERSION }}\`"
+            echo "- Automation patch: \`${{ github.event.inputs.applyAutomationPatch }}\` (applied: \`${{ env.PATCH_APPLIED }}\`)"
+            echo ""
+            echo "Features: \`ActionSetSmbMinutes\` / \`ActionSetUamMinutes\` / \`TriggerCarbsAgo\`"
+          } >> $GITHUB_STEP_SUMMARY
 
   # Configuration: Threshold-based cleanup
   # Clean up only occurs when total runs exceed: keep_runs + keep_threshold (e.g., 20 + 5 = 25)

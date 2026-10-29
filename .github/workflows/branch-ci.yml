@@ -163,6 +163,19 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v5
 
+      - name: Apply local patches (if present)
+        run: |
+          shopt -s nullglob
+          PATCHES=(./*.patch)
+          if [ ${#PATCHES[@]} -gt 0 ]; then
+            for p in "${PATCHES[@]}"; do
+              git apply "$p"
+              echo "Applied patch: $p"
+            done
+          else
+            echo "No .patch file in repo root, building official source as-is."
+          fi
+
       - name: Load jdk versions
         run: |
           JAVA_VERSION=$(jq -r '.default' .github/jdk-map.json)
